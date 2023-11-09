@@ -94,7 +94,7 @@ class UnifiController(RegexSwitchDevice):
     def login(self):
         data = {"username": self.api_username, "password": self.api_password}
 
-        r = self.call_api("POST", "api/login", data)
+        r = self.call_api("POST", "api/auth/login", data)
         self._current_status_code = r.status_code
 
         if self._current_status_code == 400:
