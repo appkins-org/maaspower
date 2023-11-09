@@ -19,6 +19,16 @@ devices:
     on: main switch on
     query: switch
 
+  - type: UnifiController
+    name: unifi
+    on: "1"
+    off: "1"
+    query: "1"
+    api_host: 10.0.0.1
+    api_username: terraform
+    api_password: password
+    site: default
+
   # These require that the server is running on a machine with USB
   # connection to a power control USB hub and the uhubctl utility installed.
   - type: CommandLine

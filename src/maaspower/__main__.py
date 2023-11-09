@@ -12,13 +12,20 @@ from . import __version__, maas_globals
 # import all subclasses of SwitchDevice so ApiSchema sees them
 from .devices.shell_cmd import CommandLine
 from .devices.smart_thing import SmartThing
+from .devices.unifi_controller import UnifiController
 from .devices.web_device import WebDevice
 from .devices.web_ui import WebGui
 from .maasconfig import MaasConfig
 from .webhook import run_web_hook
 
 # avoid linter complaints
-required_to_find_subclasses = [SmartThing, CommandLine, WebGui, WebDevice]
+required_to_find_subclasses = [
+    UnifiController,
+    SmartThing,
+    CommandLine,
+    WebGui,
+    WebDevice,
+]
 
 cli = typer.Typer()
 yaml = YAML()

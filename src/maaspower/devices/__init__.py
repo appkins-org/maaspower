@@ -9,4 +9,4 @@ from . import shell_cmd, smart_thing, web_device, web_ui
 
 # __all__ defines the public API for the package.
 # Each module also defines its own __all__.
-__all__ = ["shell_cmd", "smart_thing", "web_ui", "web_device"]
+__all__ = ["shell_cmd", "smart_thing", "unifi_controller", "web_ui", "web_device"]

@@ -161,6 +161,79 @@
                 "description": "match the off status return from query",
                 "default": "off"
               },
+              "on": {
+                "type": "string",
+                "description": "command line string to switch device on",
+                "default": "none"
+              },
+              "off": {
+                "type": "string",
+                "description": "command line string to switch device off",
+                "default": "none"
+              },
+              "query": {
+                "type": "string",
+                "description": "command line string to query device state",
+                "default": "none"
+              },
+              "type": {
+                "type": "string",
+                "const": "UnifiController",
+                "default": "UnifiController"
+              },
+              "api_username": {
+                "type": "string",
+                "description": "The UniFi api username",
+                "default": "none"
+              },
+              "api_password": {
+                "type": "string",
+                "description": "The UniFi api password",
+                "default": "none"
+              },
+              "api_host": {
+                "type": "string",
+                "description": "The UniFi api host",
+                "default": "none"
+              },
+              "device_mac": {
+                "type": "string",
+                "description": "The UniFi device mac address"
+              },
+              "site": {
+                "type": "string",
+                "description": "The UniFi site name",
+                "default": "default"
+              },
+              "verify_ssl": {
+                "type": "boolean",
+                "description": "Verify SSL certificate",
+                "default": false
+              }
+            },
+            "required": [
+              "name",
+              "device_mac"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "A name for the switching device"
+              },
+              "query_on_regex": {
+                "type": "string",
+                "description": "match the on status return from query",
+                "default": "on"
+              },
+              "query_off_regex": {
+                "type": "string",
+                "description": "match the off status return from query",
+                "default": "off"
+              },
               "type": {
                 "type": "string",
                 "const": "WebGui",
