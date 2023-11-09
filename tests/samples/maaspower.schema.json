@@ -196,6 +196,11 @@
                 "description": "The UniFi api host",
                 "default": "none"
               },
+              "network_id": {
+                "type": "string",
+                "description": "The UniFi network id",
+                "default": "none"
+              },
               "device_mac": {
                 "type": "string",
                 "description": "The UniFi device mac address"

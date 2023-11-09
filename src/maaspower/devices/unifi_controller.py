@@ -43,6 +43,8 @@ class UnifiController(RegexSwitchDevice):
     api_password: A[str, desc("The UniFi API password")] = "none"
     api_host: A[str, desc("The UniFi API host")] = "none"
 
+    network_id: A[str, desc("The UniFi network id to control")] = "none"
+
     device_mac: A[str, desc("The UniFi device mac address to control")] = "none"
 
     site: A[str, desc("The UniFi site to connect to")] = "default"
@@ -170,7 +172,12 @@ class UnifiController(RegexSwitchDevice):
         print(f"turning on device: {self._id} on port {self.on}")
         json_data = {
             "port_overrides": [
-                {"port_idx": int(self.on), "poe_enable": True, "poe_mode": "auto"}
+                {
+                    "port_idx": int(self.on),
+                    "poe_enable": True,
+                    "poe_mode": "auto",
+                    "native_networkconf_id": self.network_id,
+                }
             ]
         }
         print(json.dumps(json_data))
@@ -190,7 +197,12 @@ class UnifiController(RegexSwitchDevice):
         print(f"turning off device: {self._id} on port {self.on}")
         json_data = {
             "port_overrides": [
-                {"port_idx": int(self.off), "poe_enable": False, "poe_mode": "off"}
+                {
+                    "port_idx": int(self.off),
+                    "poe_enable": False,
+                    "poe_mode": "off",
+                    "native_networkconf_id": self.network_id,
+                }
             ]
         }
         print(json.dumps(json_data))
