@@ -159,7 +159,11 @@ class UnifiController(RegexSwitchDevice):
 
     def turn_on(self):
         print(f"turning on device: {self._id} on port {self.on}")
-        json_data = {"port_overrides": [{"port_idx": int(self.on), "poe_enable": True}]}
+        json_data = {
+            "port_overrides": [
+                {"port_idx": int(self.on), "poe_enable": True, "poe_mode": "auto"}
+            ]
+        }
         print(json.dumps(json_data))
 
         r = self.call_api(
@@ -171,7 +175,9 @@ class UnifiController(RegexSwitchDevice):
     def turn_off(self):
         print(f"turning off device: {self._id} on port {self.on}")
         json_data = {
-            "port_overrides": [{"port_idx": int(self.off), "poe_enable": False}]
+            "port_overrides": [
+                {"port_idx": int(self.off), "poe_enable": False, "poe_mode": "off"}
+            ]
         }
         print(json.dumps(json_data))
         r = self.call_api(
