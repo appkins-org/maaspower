@@ -8,6 +8,7 @@ that can be controlled via a UniFi controller.
 """
 import json
 from dataclasses import dataclass
+from time import sleep
 
 import requests
 import urllib3
@@ -157,6 +158,14 @@ class UnifiController(RegexSwitchDevice):
         else:
             return {}
 
+    def get_port_state(self, port) -> bool:
+        port_table = self.get_port_table()
+        port = next(p for p in port_table if p["port_idx"] == int(port))
+
+        if "up" in port:
+            return port["up"]
+        return False
+
     def turn_on(self):
         print(f"turning on device: {self._id} on port {self.on}")
         json_data = {
@@ -172,6 +181,11 @@ class UnifiController(RegexSwitchDevice):
 
         print(f"status code: {r.status_code}")
 
+        print("Waiting for device to turn on...")
+
+        while self.get_port_state(self.on) is False:
+            sleep(2)
+
     def turn_off(self):
         print(f"turning off device: {self._id} on port {self.on}")
         json_data = {
@@ -186,10 +200,12 @@ class UnifiController(RegexSwitchDevice):
 
         print(f"status code: {r.status_code}")
 
-    def run_query(self) -> str:
-        port_table = self.get_port_table()
-        port = next(p for p in port_table if p["port_idx"] == int(self.query))
+        print("Waiting for device to turn off...")
 
-        if "up" in port:
-            return "on" if port["up"] is True else "off"
-        return "error"
+        while self.get_port_state(self.off) is True:
+            sleep(2)
+
+    def run_query(self) -> str:
+        port_state = self.get_port_state(self.query)
+
+        return "on" if port_state is True else "off"
