@@ -100,7 +100,7 @@ class UnifiController(RegexSwitchDevice):
         if self._current_status_code == 400:
             raise LoggedInException("Failed to log in to api with provided credentials")
 
-    def call_api(self, method, path, json_data=None):
+    def call_api(self, method, path, json_data={}):
         if self._csrf_token is not None:
             print("Update CSRF Token")
             self.session.headers.update({"X-CSRF-Token": self._csrf_token})
