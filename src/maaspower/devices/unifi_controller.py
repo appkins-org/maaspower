@@ -125,6 +125,8 @@ class UnifiController(RegexSwitchDevice):
             if h.upper() == "SET-COOKIE":
                 self._cookie_token = resp_headers[h]
 
+        return r
+
     def disconnect(self):
         self.call_api("POST", "api/logout")
         try:
