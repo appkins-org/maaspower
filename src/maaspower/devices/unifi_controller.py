@@ -56,6 +56,9 @@ class UnifiController(RegexSwitchDevice):
             "Content-Type": "application/json",
         }
 
+        self._csrf_token = None
+        self._cookie_token = None
+
         self.session = requests.Session()
 
         self._base_url = f"https://{self.api_host}:443"
@@ -81,60 +84,59 @@ class UnifiController(RegexSwitchDevice):
         self.disconnect()
 
     def connect(self, retries=2):
-        r = self.session.post(
-            self._login,
-            headers=self._headers,
-            json={"username": self.api_username, "password": self.api_password},
-            verify=self.verify_ssl,
-            timeout=1,
-        )
-        self._current_status_code = r.status_code
-
-        if self._current_status_code == 400:
-            raise LoggedInException("Failed to log in to api with provided credentials")
-
-        d = r.json()
+        self.login()
 
         status = self.get_status()
         self._id = status["_id"]
 
         print(f"id: {self._id}")
 
-        self._auth_headers: Dict[str, str] = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-Dest": "empty",
-            "TE": "trailers",
-        }
+    def login(self):
+        data = {"username": self.api_username, "password": self.api_password}
 
-        if "unique_id" in d:
-            self._auth_headers["X-CSRF-Token"] = d["unique_id"]
+        r = self.call_api("POST", "api/login", data)
+        self._current_status_code = r.status_code
 
-        if "deviceToken" in d:
-            self._auth_headers["Set-Cookie"] = f"TOKEN={d['deviceToken']}"
+        if self._current_status_code == 400:
+            raise LoggedInException("Failed to log in to api with provided credentials")
+
+    def call_api(self, method, path, json_data=None):
+        if self._csrf_token is not None:
+            print("Update CSRF Token")
+            self.session.headers.update({"X-CSRF-Token": self._csrf_token})
+            print("...done.")
+        else:
+            print("CSRF Token is None.")
+
+        r = self.session.request(
+            method,
+            f"{self._base_url}/{path}",
+            headers={"Content-Type": "application/json"},
+            json=json_data,
+            verify=self.verify_ssl,
+            timeout=10,
+        )
+
+        resp_headers = r.headers
+
+        for h in resp_headers:
+            if h.upper() == "X-CSRF-TOKEN":
+                self._csrf_token = resp_headers[h]
+            if h.upper() == "SET-COOKIE":
+                self._cookie_token = resp_headers[h]
 
     def disconnect(self):
-        self.session.post(
-            f"{self._base_url}/api/logout",
-            headers=self._headers,
-            verify=self.verify_ssl,
-            timeout=1,
-        )
+        self.call_api("POST", "api/logout")
         try:
             self.session.close()
         except Exception:
             pass
 
     def get_status(self) -> dict:
-        r = self.session.get(
-            f"{self._endpoint}/stat/device/{self.device_mac}",
-            headers=self._headers,
-            verify=self.verify_ssl,
-            timeout=1,
+        r = self.call_api(
+            "GET", f"proxy/network/api/s/{self.site}/stat/device/{self.device_mac}"
         )
+
         return r.json()["data"][0]
 
     def get_port_table(self) -> dict:
@@ -148,13 +150,11 @@ class UnifiController(RegexSwitchDevice):
         print(f"turning on device: {self._id} on port {self.on}")
         json_data = {"port_overrides": [{"port_idx": int(self.on), "poe_enable": True}]}
         print(json.dumps(json_data))
-        r = self.session.put(
-            f"{self._endpoint}/rest/device/{self._id}",
-            headers=self._auth_headers,
-            json=json_data,
-            verify=self.verify_ssl,
-            timeout=10,
+
+        r = self.call_api(
+            "PUT", f"proxy/network/api/s/{self.site}/rest/device/{self._id}", json_data
         )
+
         print(f"status code: {r.status_code}")
 
     def turn_off(self):
@@ -163,13 +163,10 @@ class UnifiController(RegexSwitchDevice):
             "port_overrides": [{"port_idx": int(self.off), "poe_enable": False}]
         }
         print(json.dumps(json_data))
-        r = self.session.put(
-            f"{self._endpoint}/rest/device/{self._id}",
-            headers=self._auth_headers,
-            json=json_data,
-            verify=self.verify_ssl,
-            timeout=10,
+        r = self.call_api(
+            "PUT", f"proxy/network/api/s/{self.site}/rest/device/{self._id}", json_data
         )
+
         print(f"status code: {r.status_code}")
 
     def run_query(self) -> str:
