@@ -72,11 +72,6 @@ class UnifiController(RegexSwitchDevice):
         if self.query == "none":
             self.query = self.port_idx
 
-        asyncio.run(self.connect())
-
-    def __del__(self):
-        asyncio.run(self.disconnect())
-
     async def request(self, method: str, url: str, data: dict = {}):
         """Perform a request against the specified parameters."""
         if self._csrf_token is not None:
@@ -126,25 +121,6 @@ class UnifiController(RegexSwitchDevice):
     async def put(self, path: str, json_data: dict):
         return self.request("put", f"{self._api_endpoint}/{path}", json_data)
 
-    async def connect(self, retries=2):
-        async with ClientSession() as session:
-            self._session = session
-            await self.login()
-
-            status = await self.get_status()
-            self._id = status["_id"]
-
-            print(f"id: {self._id}")
-
-    async def disconnect(self):
-        async with ClientSession() as session:
-            self._session = session
-            await self.request("POST", "api/logout")
-            try:
-                self._session.close()
-            except Exception:
-                pass
-
     async def login(self):
         """Login to unifi controller."""
         payload = {"username": self.api_username, "password": self.api_password}
@@ -184,6 +160,10 @@ class UnifiController(RegexSwitchDevice):
     async def get_port_state(self, port) -> str:
         async with ClientSession() as session:
             self._session = session
+
+            if self._csrf_token is None:
+                await self.login()
+
             port = await self.get_port(port)
 
             if "up" in port:
@@ -193,6 +173,15 @@ class UnifiController(RegexSwitchDevice):
     async def set_port_state(self, port, state):
         async with ClientSession() as session:
             self._session = session
+
+            if self._csrf_token is None:
+                await self.login()
+
+            if self._id is None:
+                status = await self.get_status()
+                self._id = status["_id"]
+
+                print(f"id: {self._id}")
 
             des = {
                 "poe_enable": True if state == "on" else False,
