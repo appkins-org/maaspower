@@ -55,8 +55,6 @@ class UnifiController(RegexSwitchDevice):
         self._cookie_token = None
         self._id = None
 
-        self._session = ClientSession()
-
         self._base_url = f"https://{self.api_host}:443"
 
         # proxy/network/api/s/default/rest/device/d8:b3:70:7b:7b:68
@@ -129,19 +127,23 @@ class UnifiController(RegexSwitchDevice):
         return self.request("put", f"{self._api_endpoint}/{path}", json_data)
 
     async def connect(self, retries=2):
-        await self.login()
+        async with ClientSession() as session:
+            self._session = session
+            await self.login()
 
-        status = await self.get_status()
-        self._id = status["_id"]
+            status = await self.get_status()
+            self._id = status["_id"]
 
-        print(f"id: {self._id}")
+            print(f"id: {self._id}")
 
     async def disconnect(self):
-        await self.request("POST", "api/logout")
-        try:
-            self._session.close()
-        except Exception:
-            pass
+        async with ClientSession() as session:
+            self._session = session
+            await self.request("POST", "api/logout")
+            try:
+                self._session.close()
+            except Exception:
+                pass
 
     async def login(self):
         """Login to unifi controller."""
@@ -179,38 +181,43 @@ class UnifiController(RegexSwitchDevice):
 
         return {}
 
-    async def get_port_state(self, port) -> bool:
-        port = await self.get_port(port)
+    async def get_port_state(self, port) -> str:
+        async with ClientSession() as session:
+            self._session = session
+            port = await self.get_port(port)
 
-        if "up" in port:
-            return port["up"]
-        return False
+            if "up" in port:
+                return "on" if port["up"] is True else "off"
+            return "unknown"
 
     async def set_port_state(self, port, state):
-        des = {
-            "poe_enable": True if state == "on" else False,
-            "poe_mode": "auto" if state == "on" else "off",
-        }
+        async with ClientSession() as session:
+            self._session = session
 
-        cur = await self.get_port(port)
+            des = {
+                "poe_enable": True if state == "on" else False,
+                "poe_mode": "auto" if state == "on" else "off",
+            }
 
-        if (
-            cur["poe_enable"] is des["poe_enable"]
-            and cur["poe_mode"] == des["poe_mode"]
-        ):
-            print(f"Port {port} already {state}")
-            return
+            cur = await self.get_port(port)
 
-        new_state = cur.update(des)
+            if (
+                cur["poe_enable"] is des["poe_enable"]
+                and cur["poe_mode"] == des["poe_mode"]
+            ):
+                print(f"Port {port} already {state}")
+                return
 
-        print(f"Setting port {port} to {state}")
+            new_state = cur.update(des)
 
-        asyncio.run(
-            self.put(
-                f"rest/device/{self._id}",
-                {"port_overrides": [new_state]},
+            print(f"Setting port {port} to {state}")
+
+            asyncio.run(
+                self.put(
+                    f"rest/device/{self._id}",
+                    {"port_overrides": [new_state]},
+                )
             )
-        )
 
     def turn_on(self):
         asyncio.run(self.set_port_state(self.port_idx, "on"))
@@ -222,6 +229,4 @@ class UnifiController(RegexSwitchDevice):
         asyncio.run(self.set_port_state(self.port_idx, "off"))
 
     def run_query(self) -> str:
-        port_state = self.get_port_state(self.query)
-
-        return "on" if port_state is True else "off"
+        return asyncio.run(self.get_port_state(self.query))
