@@ -6,12 +6,12 @@ Classes to represent the configuration and functionality for devices
 that can be controlled via a UniFi controller.
 
 """
-import json
+import asyncio
 from dataclasses import dataclass
-from time import sleep
 
-import requests
 import urllib3
+from requests import Request
+from requests_threads import AsyncSession
 from typing_extensions import Annotated as A
 from typing_extensions import Dict, Literal
 from urllib3.exceptions import InsecureRequestWarning
@@ -61,16 +61,17 @@ class UnifiController(RegexSwitchDevice):
 
         self._csrf_token = None
         self._cookie_token = None
+        self._id = None
 
-        self.session = requests.Session()
+        self._s = AsyncSession()
 
         self._base_url = f"https://{self.api_host}:443"
 
         # proxy/network/api/s/default/rest/device/d8:b3:70:7b:7b:68
 
-        self._endpoint = f"{self._base_url}/proxy/network/api/s/{self.site}"
+        self._api_endpoint = f"proxy/network/api/s/{self.site}"
 
-        self._login = f"{self._base_url}/api/auth/login"
+        self._login = "api/auth/login"
 
         if self.on == "none":
             self.on = self.port_idx
@@ -81,53 +82,29 @@ class UnifiController(RegexSwitchDevice):
         if self.query == "none":
             self.query = self.port_idx
 
-        self.connect()
+        asyncio.run(self.connect())
 
     def __del__(self):
-        self.disconnect()
-
-    def connect(self, retries=2):
-        self.login()
-
-        status = self.get_status()
-        self._id = status["_id"]
-
-        print(f"id: {self._id}")
-
-    def login(self):
-        data = {"username": self.api_username, "password": self.api_password}
-
-        r = self.call_api("POST", "api/auth/login", data)
-        self._current_status_code = r.status_code
-
-        if self._current_status_code == 400:
-            raise LoggedInException("Failed to log in to api with provided credentials")
+        asyncio.run(self.disconnect())
 
     def call_api(self, method, path, json_data=None):
         if self._csrf_token is not None:
             print("Update CSRF Token")
-            self.session.headers.update({"X-CSRF-Token": self._csrf_token})
+            self._s.headers.update({"X-CSRF-Token": self._csrf_token})
             print("...done.")
         else:
             print("CSRF Token is None.")
 
-        if json_data is None:
-            r = self.session.request(
-                method,
-                f"{self._base_url}/{path}",
-                headers={"Content-Type": "application/json"},
-                verify=self.verify_ssl,
-                timeout=10,
-            )
-        else:
-            r = self.session.request(
-                method,
-                f"{self._base_url}/{path}",
-                headers={"Content-Type": "application/json"},
-                json=json_data,
-                verify=self.verify_ssl,
-                timeout=10,
-            )
+        req = Request(
+            method,
+            f"{self._base_url}/{path}",
+            headers={"Content-Type": "application/json"},
+        )
+
+        if json_data is not None:
+            req.json = json_data
+
+        r = self._s.send(req.prepare(), verify=self.verify_ssl, timeout=10)
 
         resp_headers = r.headers
 
@@ -139,83 +116,88 @@ class UnifiController(RegexSwitchDevice):
 
         return r
 
-    def disconnect(self):
-        self.call_api("POST", "api/logout")
+    async def get(self, path):
+        return self.call_api("GET", f"{self._api_endpoint}/{path}")
+
+    async def put(self, path, json_data):
+        return self.call_api("PUT", f"{self._api_endpoint}/{path}", json_data)
+
+    async def connect(self, retries=2):
+        self.login()
+
+        status = await self.get_status()
+        self._id = status["_id"]
+
+        print(f"id: {self._id}")
+
+    async def disconnect(self):
+        await self.call_api("POST", "api/logout")
         try:
-            self.session.close()
+            self._s.close()
         except Exception:
             pass
 
-    def get_status(self) -> dict:
-        r = self.call_api(
-            "GET", f"proxy/network/api/s/{self.site}/stat/device/{self.device_mac}"
-        )
+    async def login(self):
+        data = {"username": self.api_username, "password": self.api_password}
+
+        r = await self.call_api("POST", self._login, data)
+
+        if r.status_code == 400:
+            raise LoggedInException("Failed to log in to api with provided credentials")
+
+    async def get_status(self) -> dict:
+        r = await self.get(f"rest/device/{self.device_mac}")
 
         return r.json()["data"][0]
 
-    def get_port_table(self) -> dict:
-        status = self.get_status()
+    async def get_port(self, port) -> dict:
+        status = await self.get_status()
         if "port_table" in status:
-            return status["port_table"]
-        else:
-            return {}
+            return next(p for p in status["port_table"] if p["port_idx"] == int(port))
 
-    def get_port_state(self, port) -> bool:
-        port_table = self.get_port_table()
-        port = next(p for p in port_table if p["port_idx"] == int(port))
+        return {}
+
+    async def get_port_state(self, port) -> bool:
+        port = await self.get_port(port)
 
         if "up" in port:
             return port["up"]
         return False
 
-    def turn_on(self):
-        print(f"turning on device: {self._id} on port {self.on}")
-        json_data = {
-            "port_overrides": [
-                {
-                    "port_idx": int(self.on),
-                    "poe_enable": True,
-                    "poe_mode": "auto",
-                    "native_networkconf_id": self.network_id,
-                }
-            ]
+    async def set_port_state(self, port, state):
+        des = {
+            "poe_enable": True if state == "on" else False,
+            "poe_mode": "auto" if state == "on" else "off",
         }
-        print(json.dumps(json_data))
 
-        r = self.call_api(
-            "PUT", f"proxy/network/api/s/{self.site}/rest/device/{self._id}", json_data
+        cur = await self.get_port(port)
+
+        if (
+            cur["poe_enable"] is des["poe_enable"]
+            and cur["poe_mode"] == des["poe_mode"]
+        ):
+            print(f"Port {port} already {state}")
+            return
+
+        new_state = cur.update(des)
+
+        print(f"Setting port {port} to {state}")
+
+        asyncio.run(
+            self.put(
+                f"rest/device/{self._id}",
+                {"port_overrides": [new_state]},
+            )
         )
 
-        print(f"status code: {r.status_code}")
+    def turn_on(self):
+        asyncio.run(self.set_port_state(self.on, "on"))
 
-        print("Waiting for device to turn on...")
-
-        while self.get_port_state(self.on) is False:
-            sleep(2)
+    def get_url(self, path):
+        return f"{self._base_url}/{path}"
 
     def turn_off(self):
-        print(f"turning off device: {self._id} on port {self.on}")
-        json_data = {
-            "port_overrides": [
-                {
-                    "port_idx": int(self.off),
-                    "poe_enable": False,
-                    "poe_mode": "off",
-                    "native_networkconf_id": self.network_id,
-                }
-            ]
-        }
-        print(json.dumps(json_data))
-        r = self.call_api(
-            "PUT", f"proxy/network/api/s/{self.site}/rest/device/{self._id}", json_data
-        )
-
-        print(f"status code: {r.status_code}")
-
-        print("Waiting for device to turn off...")
-
-        while self.get_port_state(self.off) is True:
-            sleep(2)
+        asyncio.run(self.set_port_state(self.off, "off"))
 
     def run_query(self) -> str:
         port_state = self.get_port_state(self.query)
