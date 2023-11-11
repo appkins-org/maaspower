@@ -87,7 +87,7 @@ class UnifiController(RegexSwitchDevice):
     def __del__(self):
         asyncio.run(self.disconnect())
 
-    def call_api(self, method, path, json_data=None):
+    async def call_api(self, method, path, json_data=None):
         if self._csrf_token is not None:
             print("Update CSRF Token")
             self._s.headers.update({"X-CSRF-Token": self._csrf_token})
@@ -104,7 +104,7 @@ class UnifiController(RegexSwitchDevice):
         if json_data is not None:
             req.json = json_data
 
-        r = self._s.send(req.prepare(), verify=self.verify_ssl, timeout=10)
+        r = await self._s.send(req.prepare(), verify=self.verify_ssl, timeout=10)
 
         resp_headers = r.headers
 
