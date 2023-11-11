@@ -9,15 +9,14 @@ that can be controlled via a UniFi controller.
 import asyncio
 from dataclasses import dataclass
 
-import urllib3
-from requests import Request
-from requests_threads import AsyncSession
+from aiohttp import ClientSession
 from typing_extensions import Annotated as A
-from typing_extensions import Dict, Literal
-from urllib3.exceptions import InsecureRequestWarning
+from typing_extensions import Literal
 
 from maaspower.maas_globals import desc
 from maaspower.maasconfig import RegexSwitchDevice
+
+from .errors import APIInvalidGrant, APIResponseError
 
 
 class LoggedInException(Exception):
@@ -52,18 +51,11 @@ class UnifiController(RegexSwitchDevice):
     verify_ssl: A[bool, desc("Verify SSL certificate")] = False
 
     def __post_init__(self):
-        urllib3.disable_warnings(InsecureRequestWarning)
-
-        self._headers: Dict[str, str] = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-
         self._csrf_token = None
         self._cookie_token = None
         self._id = None
 
-        self._s = AsyncSession()
+        self._session = ClientSession()
 
         self._base_url = f"https://{self.api_host}:443"
 
@@ -87,40 +79,54 @@ class UnifiController(RegexSwitchDevice):
     def __del__(self):
         asyncio.run(self.disconnect())
 
-    async def call_api(self, method, path, json_data=None):
+    async def request(self, method: str, url: str, data: dict = {}):
+        """Perform a request against the specified parameters."""
         if self._csrf_token is not None:
             print("Update CSRF Token")
-            self._s.headers.update({"X-CSRF-Token": self._csrf_token})
+            self._session.headers.update({"X-CSRF-Token": self._csrf_token})
             print("...done.")
         else:
             print("CSRF Token is None.")
-
-        req = Request(
+        async with self._session.request(
             method,
-            f"{self._base_url}/{path}",
-            headers={"Content-Type": "application/json"},
-        )
+            url,
+            json=data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": self._csrf_token,
+            },
+        ) as resp:
+            if resp.status == 200:
+                for h in resp.headers:
+                    if h.upper() == "X-CSRF-TOKEN":
+                        self._csrf_token = resp.headers[h]
+                    if h.upper() == "SET-COOKIE":
+                        self._cookie_token = resp.headers[h]
 
-        if json_data is not None:
-            req.json = json_data
+                return await resp.json()
+            if resp.status in (400, 422, 429, 500):
+                data = {}
+                try:
+                    data = await resp.json()
+                except Exception:  # pylint: disable=broad-except
+                    pass
+                raise APIResponseError(
+                    resp.request_info,
+                    resp.history,
+                    status=resp.status,
+                    message=resp.reason,
+                    headers=resp.headers,
+                    data=data,
+                )
+            resp.raise_for_status()
 
-        r = await self._s.send(req.prepare(), verify=self.verify_ssl, timeout=10)
+    async def get(self, path: str):
+        """Get a resource."""
+        return self.request("get", f"{self._api_endpoint}/{path}")
 
-        resp_headers = r.headers
-
-        for h in resp_headers:
-            if h.upper() == "X-CSRF-TOKEN":
-                self._csrf_token = resp_headers[h]
-            if h.upper() == "SET-COOKIE":
-                self._cookie_token = resp_headers[h]
-
-        return r
-
-    async def get(self, path):
-        return self.call_api("GET", f"{self._api_endpoint}/{path}")
-
-    async def put(self, path, json_data):
-        return self.call_api("PUT", f"{self._api_endpoint}/{path}", json_data)
+    async def put(self, path: str, json_data: dict):
+        return self.request("put", f"{self._api_endpoint}/{path}", json_data)
 
     async def connect(self, retries=2):
         await self.login()
@@ -131,19 +137,35 @@ class UnifiController(RegexSwitchDevice):
         print(f"id: {self._id}")
 
     async def disconnect(self):
-        await self.call_api("POST", "api/logout")
+        await self.request("POST", "api/logout")
         try:
-            self._s.close()
+            self._session.close()
         except Exception:
             pass
 
     async def login(self):
-        data = {"username": self.api_username, "password": self.api_password}
-
-        r = await self.call_api("POST", self._login, data)
-
-        if r.status_code == 400:
-            raise LoggedInException("Failed to log in to api with provided credentials")
+        """Login to unifi controller."""
+        payload = {"username": self.api_username, "password": self.api_password}
+        async with self._session.request(
+            "post",
+            self._login,
+            data=payload,
+        ) as resp:
+            if resp.status == 200:
+                for h in resp.headers:
+                    if h.upper() == "X-CSRF-TOKEN":
+                        self._csrf_token = resp.headers[h]
+                    if h.upper() == "SET-COOKIE":
+                        self._cookie_token = resp.headers[h]
+                return await resp.json()
+            if resp.status == 400:
+                data = {}
+                try:
+                    data = await resp.json()
+                except Exception:  # pylint: disable=broad-except
+                    pass
+                raise APIInvalidGrant(data.get("error_description"))
+            resp.raise_for_status()
 
     async def get_status(self) -> dict:
         r = await self.get(f"rest/device/{self.device_mac}")
