@@ -123,7 +123,7 @@ class UnifiController(RegexSwitchDevice):
         return self.call_api("PUT", f"{self._api_endpoint}/{path}", json_data)
 
     async def connect(self, retries=2):
-        self.login()
+        await self.login()
 
         status = await self.get_status()
         self._id = status["_id"]
@@ -191,13 +191,13 @@ class UnifiController(RegexSwitchDevice):
         )
 
     def turn_on(self):
-        asyncio.run(self.set_port_state(self.on, "on"))
+        asyncio.run(self.set_port_state(self.port_idx, "on"))
 
     def get_url(self, path):
         return f"{self._base_url}/{path}"
 
     def turn_off(self):
-        asyncio.run(self.set_port_state(self.off, "off"))
+        asyncio.run(self.set_port_state(self.port_idx, "off"))
 
     def run_query(self) -> str:
         port_state = self.get_port_state(self.query)
