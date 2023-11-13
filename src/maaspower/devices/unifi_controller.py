@@ -117,10 +117,10 @@ class UnifiController(RegexSwitchDevice):
 
     async def get(self, path: str):
         """Get a resource."""
-        return self.request("get", f"{self._api_endpoint}/{path}")
+        return await self.request("get", f"{self._api_endpoint}/{path}")
 
     async def put(self, path: str, json_data: dict):
-        return self.request("put", f"{self._api_endpoint}/{path}", json_data)
+        return await self.request("put", f"{self._api_endpoint}/{path}", json_data)
 
     async def login(self):
         """Login to unifi controller."""
@@ -148,9 +148,7 @@ class UnifiController(RegexSwitchDevice):
             resp.raise_for_status()
 
     async def get_status(self) -> dict:
-        r = await self.get(f"stat/device/{self.device_mac}")
-
-        return r["data"][0]
+        return (await self.get(f"stat/device/{self.device_mac}"))["data"][0]
 
     async def get_port(self, port) -> dict:
         status = await self.get_status()
