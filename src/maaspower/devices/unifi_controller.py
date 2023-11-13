@@ -204,11 +204,9 @@ class UnifiController(RegexSwitchDevice):
 
             print(f"Setting port {port} to {state}")
 
-            asyncio.run(
-                self.put(
-                    f"rest/device/{self._id}",
-                    {"port_overrides": [new_state]},
-                )
+            await self.put(
+                f"rest/device/{self._id}",
+                {"port_overrides": [new_state]},
             )
 
     def turn_on(self):
