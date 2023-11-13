@@ -89,6 +89,7 @@ class UnifiController(RegexSwitchDevice):
                 "Content-Type": "application/json",
                 "X-CSRF-TOKEN": self._csrf_token,
             },
+            verify_ssl=self.verify_ssl,
         ) as resp:
             if resp.status == 200:
                 for h in resp.headers:
@@ -128,6 +129,7 @@ class UnifiController(RegexSwitchDevice):
             "post",
             f"{self._base_url}/{self._login}",
             data=payload,
+            verify_ssl=self.verify_ssl,
         ) as resp:
             if resp.status == 200:
                 for h in resp.headers:
