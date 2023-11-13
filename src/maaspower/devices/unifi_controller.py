@@ -126,7 +126,7 @@ class UnifiController(RegexSwitchDevice):
         payload = {"username": self.api_username, "password": self.api_password}
         async with self._session.request(
             "post",
-            self._login,
+            f"{self._base_url}/{self._login}",
             data=payload,
         ) as resp:
             if resp.status == 200:
