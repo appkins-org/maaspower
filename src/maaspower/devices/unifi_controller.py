@@ -97,7 +97,7 @@ class UnifiController(RegexSwitchDevice):
                         self._csrf_token = resp.headers[h]
                     if h.upper() == "SET-COOKIE":
                         self._cookie_token = resp.headers[h]
-
+                self._session.cookie_jar.update_cookies(resp.cookies)
                 return await resp.json()
             if resp.status in (400, 422, 429, 500):
                 data = {}
