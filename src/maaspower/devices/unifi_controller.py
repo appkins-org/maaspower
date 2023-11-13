@@ -146,9 +146,9 @@ class UnifiController(RegexSwitchDevice):
             resp.raise_for_status()
 
     async def get_status(self) -> dict:
-        r = await self.get(f"rest/device/{self.device_mac}")
+        r = await self.get(f"stat/device/{self.device_mac}")
 
-        return r.json()["data"][0]
+        return r["data"][0]
 
     async def get_port(self, port) -> dict:
         status = await self.get_status()
