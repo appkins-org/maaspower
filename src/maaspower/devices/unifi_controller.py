@@ -141,6 +141,7 @@ class UnifiController(RegexSwitchDevice):
                         self._csrf_token = resp.headers[h]
                     if h.upper() == "SET-COOKIE":
                         self._cookie_token = resp.headers[h]
+                self._session.cookie_jar.update_cookies(resp.cookies)
                 return await resp.json()
             if resp.status == 400:
                 data = {}
@@ -165,7 +166,8 @@ class UnifiController(RegexSwitchDevice):
         async with ClientSession() as session:
             self._session = session
 
-            await self.login()
+            if self._csrf_token is None:
+                await self.login()
 
             port = await self.get_port(port)
 
@@ -177,7 +179,8 @@ class UnifiController(RegexSwitchDevice):
         async with ClientSession() as session:
             self._session = session
 
-            await self.login()
+            if self._csrf_token is None:
+                await self.login()
 
             if self._id is None:
                 status = await self.get_status()
