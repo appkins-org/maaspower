@@ -117,10 +117,14 @@ class UnifiController(RegexSwitchDevice):
 
     async def get(self, path: str):
         """Get a resource."""
-        return await self.request("get", f"{self._api_endpoint}/{path}")
+        return await self.request(
+            "get", f"{self._base_url}/{self._api_endpoint}/{path}"
+        )
 
     async def put(self, path: str, json_data: dict):
-        return await self.request("put", f"{self._api_endpoint}/{path}", json_data)
+        return await self.request(
+            "put", f"{self._base_url}/{self._api_endpoint}/{path}", json_data
+        )
 
     async def login(self):
         """Login to unifi controller."""
