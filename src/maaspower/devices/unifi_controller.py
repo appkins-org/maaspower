@@ -165,8 +165,7 @@ class UnifiController(RegexSwitchDevice):
         async with ClientSession() as session:
             self._session = session
 
-            if self._csrf_token is None:
-                await self.login()
+            await self.login()
 
             port = await self.get_port(port)
 
@@ -178,8 +177,7 @@ class UnifiController(RegexSwitchDevice):
         async with ClientSession() as session:
             self._session = session
 
-            if self._csrf_token is None:
-                await self.login()
+            await self.login()
 
             if self._id is None:
                 status = await self.get_status()
